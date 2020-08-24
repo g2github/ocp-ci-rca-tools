@@ -1,2 +1,4 @@
 .vscode
 myenv
+.DS_Store
+test-dest/
