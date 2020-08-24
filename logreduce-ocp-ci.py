@@ -12,8 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Script to ..."""
-
+import logreduce
 from logreduce.process import Classifier
 import argparse
 import json
@@ -23,7 +22,7 @@ from typing import List, Tuple, Dict
 import os
 
 
-# CLI Format$  logreduce-ocp-ci ci_level, ci_job_failure_dest [-train baseline_dir] 
+# CLI Format$  logreduce-ocp-ci ci_level, ci_job_failure_dest [--train baseline_dir, --threshold val] 
 def usage() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Aggregate OCP CI job failures for subsequant analysis")
     parser.add_argument("ci_level", choices=['infra', 'ocp'])
