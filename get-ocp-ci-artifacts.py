@@ -12,7 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-"""Script to ..."""
 
 import argparse
 from pathlib import Path
@@ -44,14 +43,17 @@ def main() -> None:
     # build out mimic of GCS OCP CI storage directory structure, to enable subsequent location of artifacts to CI job
     # example GCS OCP CI job archive base directory
     # https://storage.googleapis.com/origin-ci-test/pr-logs/pull/openshift_cluster-network-operator/758/pull-ci-openshift-cluster-network-operator-release-4.5-e2e-aws-sdn-multi/1295819731873304576/
-    if args.ocp_ci_artifacts.startswith("https://storage.googleapis.com/origin-ci-test/pr-logs/pull"):
-        ocp_ci_artifacts_metad = args.ocp_ci_artifacts[len("https://storage.googleapis.com/origin-ci-test/pr-logs/pull"):]
-        ocp_ci_metad = ocp_ci_artifacts_metad.split("/", 10)
-        build_dir = args.ci_job_failure_dest
-        for dir_lvl in ocp_ci_metad[1::]:
-            build_dir = build_dir + "/" + dir_lvl
-            if not os.path.exists(build_dir):
-                os.mkdir(build_dir)
+
+    known_unknowable = "/origin-ci-test/pr-logs/pull"
+    index = args.ocp_ci_artifacts.find(known_unknowable)
+    index += len(known_unknowable)
+    ocp_ci_artifacts_metad = args.ocp_ci_artifacts[index:]
+    ocp_ci_metad = ocp_ci_artifacts_metad.split("/", 10)
+    build_dir = args.ci_job_failure_dest
+    for dir_lvl in ocp_ci_metad[1::]:
+        build_dir = build_dir + "/" + dir_lvl
+        if not os.path.exists(build_dir):
+            os.mkdir(build_dir)
     
     # Currently using the following OCP CI Job arttifact logs;
     #  build-log.txt to mine for failures associated with the OCP cluster failures related to its hosting cloudSP
