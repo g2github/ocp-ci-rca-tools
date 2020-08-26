@@ -16,20 +16,19 @@
 import argparse
 from pathlib import Path
 from typing import List, Tuple, Dict
+import wget
 import os
 import os.path
 from os import path
-import wget
 
 
-# When a ci failure occurs this script can download the artifacts 
-# for later offline analysis
+# When a ci job error occurs, this script can download the artifacts for later offline analysis
 
-# CLI Format$  get-ocp-ci-artifacts ci_job_failure_dest ocp-ci-artifacts 
+# CLI Format$  get-ocp-ci-artifacts  ocp_ci_artifacts ci_errored_logs_dest [--train ci_success_logs_dest]
 def usage() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Download OCP CI failed job artifacts to local transfer directory")
-    parser.add_argument('ci_job_failure_dest')
     parser.add_argument('ocp_ci_artifacts')
+    parser.add_argument('ci_errored_logs_dest')
     return parser.parse_args()
 
 
@@ -37,8 +36,8 @@ def main() -> None:
     args = usage()
 
     # construct local OCP CI storage directory to mimic GCS hierarchy under CLI-specified local dir
-    if not os.path.exists(args.ci_job_failure_dest):
-        os.mkdir(args.ci_job_failure_dest)
+    if not os.path.exists(args.ci_errored_logs_dest):
+        os.mkdir(args.ci_errored_logs_dest)
 
     # build out mimic of GCS OCP CI storage directory structure, to enable subsequent location of artifacts to CI job
     # example GCS OCP CI job archive base directory
@@ -49,15 +48,15 @@ def main() -> None:
     index += len(known_unknowable)
     ocp_ci_artifacts_metad = args.ocp_ci_artifacts[index:]
     ocp_ci_metad = ocp_ci_artifacts_metad.split("/", 10)
-    build_dir = args.ci_job_failure_dest
+    build_dir = args.ci_errored_logs_dest
     for dir_lvl in ocp_ci_metad[1::]:
         build_dir = build_dir + "/" + dir_lvl
         if not os.path.exists(build_dir):
             os.mkdir(build_dir)
     
     # Currently using the following OCP CI Job arttifact logs;
-    #  build-log.txt to mine for failures associated with the OCP cluster failures related to its hosting cloudSP
-    #  events.json to mine for failures associated with the OCP cluster itself
+    #  build-log.txt to mine for erroreds associated with the OCP cluster erroreds related to its hosting cloudSP
+    #  events.json to mine for erroreds associated with the OCP cluster itself
     infra_ci_log = args.ocp_ci_artifacts + "build-log.txt"
     ocp_ci_log = args.ocp_ci_artifacts + "artifacts/build-resources/events.json"
 

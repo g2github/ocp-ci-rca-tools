@@ -22,11 +22,11 @@ from typing import List, Tuple, Dict
 import os
 
 
-# CLI Format$  logreduce-ocp-ci ci_level, ci_job_failure_dest [--train baseline_dir, --threshold val] 
+# CLI Format$  logreduce-ocp-ci ci_level, ci_errored_logs_dest [--train ci_success_logs_dest, --threshold val] 
 def usage() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Aggregate OCP CI job failures for subsequant analysis")
+    parser = argparse.ArgumentParser(description="Aggregate OCP CI job erroreds for subsequant analysis")
     parser.add_argument("ci_level", choices=['infra', 'ocp'])
-    parser.add_argument("ci_job_failure_dest")
+    parser.add_argument("ci_errored_logs_dest")
     parser.add_argument("--train", nargs="?", default=0)
     parser.add_argument("--threshold", default=0.2)
     return parser.parse_args()
@@ -87,7 +87,7 @@ def main() -> None:
     else:
         clf = Classifier.load("/tmp/model.pkt")
 
-    anomalies = get_anomalies(clf, get_event_files(args.ci_level, args.ci_job_failure_dest))
+    anomalies = get_anomalies(clf, get_event_files(args.ci_level, args.ci_errored_logs_dest))
     for (distance, path, event) in anomalies:
         if distance > args.threshold:
             print(path.name, distance)
