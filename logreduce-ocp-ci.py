@@ -21,55 +21,91 @@ from pathlib import Path
 from typing import List, Tuple, Dict
 import os
 
+ocp_Event = Dict[str, str]
+infra_Event = Dict[str, str]
 
-# CLI Format$  logreduce-ocp-ci ci_level, ci_errored_logs_dest [--train ci_success_logs_dest, --threshold val] 
+
+# CLI Format$  logreduce-ocp-ci ci_level, ocp_ci_artifacts_dest [--train ci_success_logs_dest, --threshold val] 
 def usage() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Aggregate OCP CI job erroreds for subsequant analysis")
     parser.add_argument("ci_level", choices=['infra', 'ocp'])
-    parser.add_argument("ci_errored_logs_dest")
+    parser.add_argument("ocp_ci_artifacts_dest")
     parser.add_argument("--train", nargs="?", default=0)
     parser.add_argument("--threshold", default=0.2)
     return parser.parse_args()
 
 
-def get_event_files(ci_level, dir_path: str) -> List[Path]:
+def get_ocp_event_files(dir_path: str) -> List[Path]:
     return [Path(dir) / file
         for dir, _, files in os.walk(dir_path)
             for file in files
-                if ci_level == "ocp"
-                   if file.endswith(".json") ]
+                if file.endswith(".json") ]
 
+def get_infra_event_files(dir_path: str) -> List[Path]:
+    return [Path(dir) / file
+        for dir, _, files in os.walk(dir_path)
+            for file in files
+                if file.endswith(".txt") ]
 
-Event = Dict[str, str]
-
-
-def get_events(event_file: Path) -> List[Event]:
+def get_ocp_events(event_file: Path) -> List[ocp_Event]:
     return [event
             for event in json.load(open(event_file))["items"]
                 # Filter message that contains unfilter noise such as:
                 # `ci-op-6ts4i744/e2e-openstack to origin-ci-ig-n-tjcs`
                 if not event["message"].startswith("Successfully assigned ")]
 
-def create_model(event_files: List[Path]) -> Classifier:
+def get_infra_events(event_file: Path) -> List[infra_Event]:
+    return [event
+            for event in json.load(open(event_file))["items"]
+                # Filter message that contains unfilter noise such as:
+                # `ci-op-6ts4i744/e2e-openstack to origin-ci-ig-n-tjcs`
+                if not event["message"].startswith("Successfully assigned ")]
+
+def create_ocp_model(event_files: List[Path]) -> Classifier:
     clf = Classifier("hashing_nn")
     model = clf.get("events")
     for event_file in event_files:
         print("Loading %s" % event_file)
-        events = get_events(event_file)
+        events = get_ocp_events(event_file)
         data = set([model.process_line(event["message"]) for event in events])
         model.train(data)
 
-    clf.save("/tmp/model.pkt")
+    clf.save("/tmp/ocp-model.pkt")
+    
+    return clf
+
+def create_infra_model(event_files: List[Path]) -> Classifier:
+    clf = Classifier("hashing_nn")
+    model = clf.get("events")
+    for event_file in event_files:
+        print("Loading %s" % event_file)
+        events = get_infra_events(event_file)
+        data = set([model.process_line(event["message"]) for event in events])
+        model.train(data)
+
+    clf.save("/tmp/infra-model.pkt")
 
     return clf
 
-
-def get_anomalies(clf: Classifier, event_files: List[Path]) -> List[Tuple[float, Path, Event]]:
+def get_ocp_anomalies(clf: Classifier, event_files: List[Path]) -> List[Tuple[float, Path, ocp_Event]]:
     result = []
     model = clf.get("events")
     for event_file in event_files:
         print("Testing %s" % event_file)
-        events = get_events(event_file)
+        events = get_ocp_events(event_file)
+        data = [model.process_line(event["message"]) for event in events]
+        distances = model.test(data)
+        for (distance, event) in zip(distances, events):
+            if distance[0] > 0.2:
+                result.append((distance[0], event_file, event))
+    return result
+
+def get_infra_anomalies(clf: Classifier, event_files: List[Path]) -> List[Tuple[float, Path, infra_Event]]:
+    result = []
+    model = clf.get("events")
+    for event_file in event_files:
+        print("Testing %s" % event_file)
+        events = get_infra_events(event_file)
         data = [model.process_line(event["message"]) for event in events]
         distances = model.test(data)
         for (distance, event) in zip(distances, events):
@@ -82,16 +118,40 @@ def main() -> None:
     args = usage()
 
     if args.train:
-        event_files = get_event_files(args.ci_level, args.train)
-        clf = create_model(event_files)
+        ocp_event_files = get_ocp_event_files(args.train)
+        ocp_clf = create_ocp_model(ocp_event_files)
+#        infra_event_files = get_infra_event_files(args.train)
+#        infra_clf = create_infra_model(infra_event_files)
     else:
-        clf = Classifier.load("/tmp/model.pkt")
+        ocp_clf = Classifier.load("/tmp/ocp_model.pkt")
+#        infra_clf = Classifier.load("/tmp/infra_model.pkt")
 
-    anomalies = get_anomalies(clf, get_event_files(args.ci_level, args.ci_errored_logs_dest))
-    for (distance, path, event) in anomalies:
+    ocp_anomalies = get_ocp_anomalies(ocp_clf, get_ocp_event_files(args.ocp_ci_artifacts_dest))
+#    infra_anomalies = get_infra_anomalies(infra_clf, get_infra_event_files(args.ocp_ci_artifacts_dest))
+
+    ocp_file = open('LR.out', 'a')
+    
+    for (distance, path, event) in ocp_anomalies:
         if distance > args.threshold:
-            print(path.name, distance)
-            pprint.pprint(event)
+            #print(path.name, distance)
+            #pprint.pprint(event)
+            if event.get('count') != 1: 
+                match = "[count] " + str(event.get('count')) + "\n" 
+                ocp_file.write(match)
+                match = "[logfile] " + path.name + "\n"
+                ocp_file.write(match)
+                match = "[logReduce proximity] " + str(distance) + "\n"
+                ocp_file.write(match)
+                match = "[reason] " + event.get("reason") + "\n"
+                ocp_file.write(match)
+                match = "[message] " + event.get("message") + "\n"
+                ocp_file.write(match)
+                match = "[type] " + event.get("type") + "\n"
+                ocp_file.write(match)
+
+                ocp_file.write("\n")
+    
+    ocp_file = ocp_file.close()
 
 
 if __name__ == "__main__":
