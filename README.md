@@ -12,3 +12,4 @@ References:
 - <https://github.com/openshift/ci-tools/blob/master/ARCHITECTURE.md>
 - <https://github.com/openshift/ci-tools/blob/master/CONFIGURATION.md#base_images>
 - <https://github.com/openshift/release/tree/master/ci-operator>
+- <https://github.com/kubernetes/test-infra/blob/master/gubernator/README.md#job-artifact-gcs-layout>
