@@ -15,6 +15,11 @@
 import argparse
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1
+from google.cloud import storage
+import logging
+import os
+
+
 
 def usage() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Hook into OCP CI GCS artifacts bucket for logfile access")
@@ -70,8 +75,56 @@ def receive_messages(project_id, subscription_id, timeout=None):
         except TimeoutError:
             streaming_pull_future.cancel()
 
+def receive_messages_with_flow_control(project_id, subscription_id, timeout=None):
+    """Receives messages from a pull subscription with flow control."""
+    subscriber = pubsub_v1.SubscriberClient()
+    subscription_path = subscriber.subscription_path(project_id, subscription_id)# pylint: disable=no-member
+    
+    client = storage.Client()
+    bucket = client.get_bucket('origin-ci-test')
+
+    def callback(message):
+        mdata = str(message.data)
+        mfind = mdata.find("finished.json")
+        if mfind == -1:
+            message.ack()
+        else:
+            print(f"Received {mdata}.")
+            index = mdata.find("id")
+            if index == -1:
+                print("Huh?\n")
+            else:
+                index += len("\"id\": \"origin-ci-test")
+                #index += len("\"id\":\"")
+                mfind += len("finished.json")
+                theurl = mdata[index: mfind]
+                print(theurl)
+                blob = bucket.get_blob(theurl)
+                print(f"{blob}...\n")
+                print(blob.download_as_string())
+
+
+
+
+    # Limit the subscriber to only have ten outstanding messages at a time.
+    flow_control = pubsub_v1.types.FlowControl(max_messages=10)
+
+    streaming_pull_future = subscriber.subscribe(
+        subscription_path, callback=callback, flow_control=flow_control
+    )
+    print(f"Listening for messages on {subscription_path}..\n")
+
+    # Wrap subscriber in a 'with' block to automatically call close() when done.
+    with subscriber:
+        try:
+            # When `timeout` is not set, result() will block indefinitely,
+            # unless an exception is encountered first.
+            streaming_pull_future.result(timeout=timeout)
+        except TimeoutError:
+            streaming_pull_future.cancel()
 
 if __name__ == "__main__":
     args = usage()
     list_subscriptions_in_project(args.project_id)
-    receive_messages(args.project_id, args.subscription_id)
+    #receive_messages(args.project_id, args.subscription_id)
+    receive_messages_with_flow_control(args.project_id, args.subscription_id)
