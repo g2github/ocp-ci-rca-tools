@@ -14,15 +14,13 @@
 
 import argparse
 from concurrent.futures import TimeoutError
-from google.cloud import pubsub_v1
-from google.cloud import storage
+from google.cloud import pubsub_v1, storage
+from ocpcilogreduce import ocpci_logreduce, ocpci_get_gjid, ocpci_get_jbnum, ocpci_get_lfilenm
 import logging
 import os
-import urllib.parse
-from ocpcilogreduce import ocpci_logreduce
-from ocpcilogreduce import splitall
 import time
 import json
+from pathlib import Path
 
 
 
@@ -56,45 +54,37 @@ def list_subscriptions_in_project(project_id):
         for subscription in subscriber.list_subscriptions(request={"project": project_path}):# pylint: disable=no-member
             print(subscription.name)
 
-def get_ocp_logfiles(events_json_url):
-    print(f"get_ocp_logfiles({events_json_url[:10]}) Made it!")
 
-
-# def extract_ocp_events(event_file: Path) -> Path:
-#     event_text_path = Path(str(event_file) + '.txt')
-#     event_text_path.write_text("\n".join(
-#         [event['message']
-#          for event in json.load(open(event_file))["items"]
-#         ]))
-#     return event_text_path
-
-def download_blob(bucket_name, source_blob_name, destination_file_name):
-    """Downloads a blob from the bucket."""
-    # bucket_name = "your-bucket-name"
-    # source_blob_name = "storage-object-name"
-    # destination_file_name = "local/path/to/file"
-
+def get_logfile(events_json_path, bucket_name):
+    print(f"get_logfile({events_json_path}) Made it!")
     storage_client = storage.Client()
+    bucket = storage_client.get_bucket(bucket_name)
 
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(source_blob_name)
-    blob.download_to_filename(destination_file_name)
+    events_json_blob = bucket.blob(events_json_path)
+    gjid = ocpci_get_gjid(events_json_path)
+    jbnum = ocpci_get_jbnum(events_json_path)
+    lfnm = ocpci_get_lfilenm(events_json_path)
+    local_log_dir = f"/tmp/ocpci_lr/{gjid}"
+    local_logfile = f"{local_log_dir}/{lfnm}{jbnum}.pkt"
+    if not os.path.exists(local_log_dir):
+        os.mkdir(local_log_dir)
 
-    print(
-        "Blob {} downloaded to {}.".format(
-            source_blob_name, destination_file_name
-        )
-    )
+    Path(local_logfile).touch()
 
-def process_job(mdata):
+    events_json_blob.download_to_filename(local_logfile)
+
+    return(local_logfile)
+
+def filter_jobs(mdata):
+    print("filter_jobs() Made it!")
     if "name" in mdata:
-        mdata_id = mdata["name"]
+        mdata_name = mdata["name"]
     else:
-        print("no 'id' in mdata")
-        return(-1)
+        print("no 'name' in mdata")
+        return(False)
 
-    mdata_list = splitall(mdata_id)
-    print(f"mdata_id is {mdata_id}")
+    mdata_list = mdata_name.split("/")
+    print(f"mdata_name is {mdata_name}")
 
     bucket_name = "origin-ci-test"
     org_repo = mdata_list[2]
@@ -111,52 +101,28 @@ def process_job(mdata):
     chk_bucket = storage_client.bucket(bucket_name)
 
     finished_json_blob = bucket.blob(finished_json_path)
-    print(f"finished_json_blob is {finished_json_blob}")
+    # print(f"finished_json_blob is {finished_json_blob}")
     finished_json = str(finished_json_blob.download_as_string())
-    # print(f"finished_json is {finished_json}")
+    # print(f"finished_json is {finished_json[:20]}")
 
-    stats = storage.Blob(bucket=chk_bucket, name=events_json_path).exists(storage_client)
-    if stats == False:
-        print(f"no events.json file {stats}")
-        return(False)
-    else:
-        print(f"events.json file exists {stats}")
+
 
     if "\"result\":\"SUCCESS\"" in finished_json:
+        # print("filter_jobs(): finished_json=SUCCESS filtered")
         # TBD: seed jobname LR model
+    
         return(False)
     elif "\"result\":\"FAILURE\"" in finished_json:
-        # get_ocp_logfiles(events_json)
-        ocpci_logreduce(events_json_path)
+        stats = storage.Blob(bucket=chk_bucket, name=events_json_path).exists(storage_client)
+        if stats == False:
+            print(f"no events.json file {events_json_path}")
+            return(False)
+        else:
+            print(f"events.json file exists {events_json_path}")
+            local_logfile = get_logfile(events_json_path, bucket_name)
+            ocpci_logreduce(events_json_path, local_logfile)
 
-
-def receive_messages(project_id, subscription_id, timeout=None):
-    """Receives messages from a pull subscription."""
-    subscriber = pubsub_v1.SubscriberClient()
-    # The `subscription_path` method creates a fully qualified identifier
-    # in the form `projects/{project_id}/subscriptions/{subscription_id}`
-    subscription_path = subscriber.subscription_path(project_id, subscription_id)# pylint: disable=no-member
-
-    def callback(message):
-        mdata = str(message.data)
-        # filter out messages we are not interested in
-        # only interested in finished.json file events
-        if mdata.find("finished.json") >= 0 and mdata.find("origin-ci-test/logs/") == -1:
-            process_job(mdata)
-
-        message.ack()
-
-    streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
-    print(f"Listening for messages on {subscription_path}..\n")
-
-    # Wrap subscriber in a 'with' block to automatically call close() when done.
-    with subscriber:
-        try:
-            # When `timeout` is not set, result() will block indefinitely,
-            # unless an exception is encountered first.
-            streaming_pull_future.result(timeout=timeout)
-        except TimeoutError:
-            streaming_pull_future.cancel()
+        return(True)
         
 def receive_messages_with_flow_control(project_id, subscription_id, timeout=None):
     """Receives messages from a pull subscription with flow control."""
@@ -171,19 +137,11 @@ def receive_messages_with_flow_control(project_id, subscription_id, timeout=None
 
         if "finished.json" in mdata['name'] and \
             "/logs/" not in mdata['id'] and \
-                "/pr-logs/pull/batch/" not in mdata['name']:
-            print("message accept with" + str(mdata))
-            process_job(mdata)
-        else:
-            print("message reject")
-
-        # filter out messages we are not interested in
-        # only interested in finished.json file events
-        # if mdata.find("finished.json") >= 0 and mdata.find("origin-ci-test/logs/") == -1 and mdata.find("origin-ci-test/pr-logs/pull/batch/") == -1:
-        #     print("message accept with" + mdata)
-        #     # process_job(mdata)
+                "/batch/" not in mdata['name']:
+            print("message accept") # with" + str(mdata)
+            filter_jobs(mdata)
         # else:
-        #     print("message reject")
+            # print("not finished.json")
 
         message.ack()
 
@@ -207,5 +165,4 @@ def receive_messages_with_flow_control(project_id, subscription_id, timeout=None
 if __name__ == "__main__":
     args = usage()
     list_subscriptions_in_project(args.project_id)
-    # receive_messages(args.project_id, args.subscription_id)
     receive_messages_with_flow_control(args.project_id, args.subscription_id)
