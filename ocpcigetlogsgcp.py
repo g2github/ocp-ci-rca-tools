@@ -64,10 +64,13 @@ def get_logfile(events_json_path, bucket_name):
     gjid = ocpci_get_gjid(events_json_path)
     jbnum = ocpci_get_jbnum(events_json_path)
     lfnm = ocpci_get_lfilenm(events_json_path)
-    local_log_dir = f"/tmp/ocpci_lr/{gjid}"
-    local_logfile = f"{local_log_dir}/{lfnm}{jbnum}.pkt"
+    local_log_dir = "/tmp/ocpci_lr"
+    local_logfile = f"{local_log_dir}/{gjid}/{lfnm}{jbnum}.pkt"
     if not os.path.exists(local_log_dir):
         os.mkdir(local_log_dir)
+    if not os.path.exists(f"{local_log_dir}/{gjid}"):
+        os.mkdir(f"{local_log_dir}/{gjid}")
+    
 
     Path(local_logfile).touch()
 
@@ -84,6 +87,8 @@ def filter_jobs(mdata):
         return(False)
 
     mdata_list = mdata_name.split("/")
+    if len(mdata_list) != 7:
+            return(False)
     print(f"mdata_name is {mdata_name}")
 
     bucket_name = "origin-ci-test"
@@ -131,17 +136,17 @@ def receive_messages_with_flow_control(project_id, subscription_id, timeout=None
     
     def callback(message):
         mdata = str(message.data)
-        mdata = mdata[2:-3].replace('\\n', '')
-        mdata = json.loads(mdata)
-        # "/openshift_cluster-network-operator/" in mdata['name'] and \
+        if "finished.json" in mdata:
+            mdata = mdata[2:-3].replace('\\n', '')
+            mdata = json.loads(mdata)
 
-        if "finished.json" in mdata['name'] and \
-            "/logs/" not in mdata['id'] and \
-                "/batch/" not in mdata['name']:
-            print("message accept") # with" + str(mdata)
-            filter_jobs(mdata)
-        # else:
-            # print("not finished.json")
+            if "finished.json" in mdata['name'] and \
+                "/logs/" not in mdata['id'] and \
+                    "/batch/" not in mdata['name']:
+                print("message accept") # with" + str(mdata)
+                filter_jobs(mdata)
+            # else:
+                # print("not finished.json")
 
         message.ack()
 
