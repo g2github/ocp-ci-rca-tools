@@ -56,6 +56,10 @@ def create_model(logfile: Path, gjid) -> Classifier:
 
     print("create_model(): Loading %s" % logfile)
     lf_as_list = import_logfile(logfile)
+    if not len(lf_as_list):
+        print(f"{logfile} List from import_logfile(no [items]) is empty")
+        return(False)
+
     data = set([model.process_line(lf_item["message"]) for lf_item in lf_as_list])
     model.train(data)
 
@@ -71,7 +75,7 @@ def ocpci_get_gjid(logfile_path):
     
     org_repo = parts[2]
     job_name = parts[4]
-    gjid = org_repo + "-" + job_name
+    gjid = org_repo + "--" + job_name
 
     return(gjid)
 
@@ -103,7 +107,10 @@ def ocpci_logreduce(cld_logfile_path, lcl_logfile_path):
         clf = Classifier.load(f"/tmp/ocpci_lr/{gjid}.pkt")
         anomalies = get_anomalies(clf, lcl_logfile_path)
         print(f"ocpci_logreduce(): {anomalies}")
+        gjid_anomalies_path = f"/tmp/ocpci_lr/{gjid}-anomalies.json"
         # store results for eventual presentation
+        with open(gjid_anomalies_path, 'a+') as f:
+            json.dump(anomalies, f) 
     else:
         create_model(lcl_logfile_path, gjid)
 
