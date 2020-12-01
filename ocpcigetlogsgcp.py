@@ -15,7 +15,7 @@
 import argparse
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1, storage
-from ocpcilogreduce import ocpci_logreduce, ocpci_get_gjid, ocpci_get_jbnum, ocpci_get_lfilenm
+from ocpcilogreduce import ocpci_logreduce, ocpci_get_gjid, ocpci_get_jbnum, ocpci_get_lfilenm, OCPCI_LOCAL_DIR_BASE
 import logging
 import os
 import time
@@ -55,26 +55,27 @@ def list_subscriptions_in_project(project_id):
             print(subscription.name)
 
 
-def get_logfile(events_json_path, bucket_name):
-    print(f"get_logfile({events_json_path}) Made it!")
+def get_logfile(cld_logfile_path, bucket_name):
+    # print(f"get_logfile({events_json_path}) Made it!")
     storage_client = storage.Client()
     bucket = storage_client.get_bucket(bucket_name)
 
-    events_json_blob = bucket.blob(events_json_path)
-    gjid = ocpci_get_gjid(events_json_path)
-    jbnum = ocpci_get_jbnum(events_json_path)
-    lfnm = ocpci_get_lfilenm(events_json_path)
-    local_log_dir = "/tmp/ocpci_lr"
-    local_logfile = f"{local_log_dir}/{gjid}/{lfnm}{jbnum}.pkt"
-    if not os.path.exists(local_log_dir):
-        os.mkdir(local_log_dir)
-    if not os.path.exists(f"{local_log_dir}/{gjid}"):
-        os.mkdir(f"{local_log_dir}/{gjid}")
+    cld_logfile_blob = bucket.blob(cld_logfile_path)
+    gjid = ocpci_get_gjid(cld_logfile_path)
+    jbnum = ocpci_get_jbnum(cld_logfile_path)
+    lfnm = ocpci_get_lfilenm(cld_logfile_path)
+    local_logfile = OCPCI_LOCAL_DIR_BASE + f"/{gjid}/{jbnum}-{lfnm}"
+    print(f"get_logfile({cld_logfile_path}) local_logfile = {local_logfile}")
+
+    if not os.path.exists(OCPCI_LOCAL_DIR_BASE):
+        os.mkdir(OCPCI_LOCAL_DIR_BASE)
+    if not os.path.exists(OCPCI_LOCAL_DIR_BASE + f"/{gjid}"):
+        os.mkdir(OCPCI_LOCAL_DIR_BASE + f"/{gjid}")
     
 
     Path(local_logfile).touch()
 
-    events_json_blob.download_to_filename(local_logfile)
+    cld_logfile_blob.download_to_filename(local_logfile)
 
     return(local_logfile)
 

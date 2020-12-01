@@ -28,6 +28,11 @@ from logreduce.tokenizer import Tokenizer
 
 logfile_as_list = Dict[str, str]
 
+OCPCI_LOCAL_DIR_BASE = "/tmp/ocpci_lr"
+OCPCI_LR_LOCAL_MODELS_DIR = OCPCI_LOCAL_DIR_BASE + "/models"
+OCPCI_LR_MODEL_FILE_FORMAT = "/model-"
+OCPCI_LR_LOCAL_ANOMOLIES_DIR = OCPCI_LOCAL_DIR_BASE + "/anomalies"
+OCPCI_LR_ANOMALIES_FILE_FORMAT = "/anomalies-"
 
 def get_anomalies(clf: Classifier, logfile: Path) -> List[Tuple[float, Path, logfile_as_list]]:
     result = []
@@ -64,14 +69,14 @@ def create_model(logfile: Path, gjid) -> Classifier:
     model.train(data)
 
 
-    clf.save(f"/tmp/ocpci_lr/{gjid}.pkt") # python pkt object
+    clf.save(OCPCI_LR_LOCAL_MODELS_DIR + OCPCI_LR_MODEL_FILE_FORMAT + f"{gjid}.pkt") # python pkt object
     
     return clf
 
-def ocpci_get_gjid(logfile_path):
+def ocpci_get_gjid(cld_logfile_path):
     # Pull classifier out of the job_artifacts_url
     # Classifier is the org_repo/job_name
-    parts = logfile_path.split("/")
+    parts = cld_logfile_path.split("/")
     
     org_repo = parts[2]
     job_name = parts[4]
@@ -97,17 +102,29 @@ def ocpci_get_lfilenm(logfile_path):
 
     return(lfilenm)
 
+def ocpci_model_exists(cld_logfile_path):
+    print(f"ocpci_model_exists({cld_logfile_path}) Made it!")
+    gjid = ocpci_get_gjid(cld_logfile_path)
+
+    if os.path.exists(OCPCI_LR_LOCAL_MODELS_DIR + OCPCI_LR_MODEL_FILE_FORMAT + f"{gjid}.pkt"):
+        return(True)
+    else:
+        return(False)
+
 def ocpci_logreduce(cld_logfile_path, lcl_logfile_path):
     print(f"ocpci_logreduce({cld_logfile_path}) Made it!")
 
     gjid = ocpci_get_gjid(cld_logfile_path)
     print(f"ocpci_logreduce(): gjid is {gjid}")
-        
-    if os.path.exists(f"/tmp/ocpci_lr/{gjid}.pkt"):
-        clf = Classifier.load(f"/tmp/ocpci_lr/{gjid}.pkt")
+
+    if ocpci_model_exists(cld_logfile_path):
+        clf = Classifier.load(OCPCI_LR_LOCAL_MODELS_DIR + OCPCI_LR_MODEL_FILE_FORMAT + f"{gjid}.pkt")
         anomalies = get_anomalies(clf, lcl_logfile_path)
-        print(f"ocpci_logreduce(): {anomalies}")
-        gjid_anomalies_path = f"/tmp/ocpci_lr/{gjid}-anomalies.json"
+        # print(f"ocpci_logreduce(): {anomalies}")
+        gjid_anomalies_path = OCPCI_LR_LOCAL_ANOMOLIES_DIR + OCPCI_LR_ANOMALIES_FILE_FORMAT + f"{gjid}.json"
+        if not os.path.exists(OCPCI_LR_LOCAL_ANOMOLIES_DIR):
+            os.mkdir(OCPCI_LR_LOCAL_ANOMOLIES_DIR)
+            
         # store results for eventual presentation
         with open(gjid_anomalies_path, 'a+') as f:
             json.dump(anomalies, f) 
