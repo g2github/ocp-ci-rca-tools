@@ -18,6 +18,12 @@ where:
 > <ocpci-topic_id> is "origin-ci-test",  
 > <ocpci-subscription_id> is "ocpci-logs". 
 
+Current data output format is:
+
+'local-ocpci-lr-server':/tmp/ocpci_lr/anomolies/anomolies-<gjid>.json
+where:
+> <gjid> is the Global Job ID that is the concatentation of the OCP CI GCS Bucket org_repo and job_name.
+
 ## References:
 
 - <https://opensource.com/article/18/9/quiet-log-noise-python-and-machine-learning>
