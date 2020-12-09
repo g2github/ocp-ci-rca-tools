@@ -15,7 +15,7 @@
 import argparse
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1, storage
-from ocpcilogreduce import ocpci_logreduce, ocpci_get_gjid, ocpci_get_jbnum, ocpci_get_lfilenm, OCPCI_LOCAL_DIR_BASE
+from ocpcilogreduce import ocpci_logreduce, ocpci_get_gjid, ocpci_get_jbnum, ocpci_get_lfilenm, OCPCI_LOCAL_DIR_BASE, ocpci_model_exists, ocpci_train_model, ocpci_create_model
 import logging
 import os
 import time
@@ -54,11 +54,24 @@ def list_subscriptions_in_project(project_id):
         for subscription in subscriber.list_subscriptions(request={"project": project_path}):# pylint: disable=no-member
             print(subscription.name)
 
+def list_blobs(bucket_name):
+    """Lists all the blobs in the bucket."""
+    # bucket_name = "your-bucket-name"
+
+    storage_client = storage.Client()
+
+    # Note: Client.list_blobs requires at least package version 1.17.0.
+    blobs = storage_client.list_blobs(bucket_name)
+
+    for blob in blobs:
+        print(blob.name)
 
 def get_logfile(cld_logfile_path, bucket_name):
     # print(f"get_logfile({events_json_path}) Made it!")
     storage_client = storage.Client()
     bucket = storage_client.get_bucket(bucket_name)
+    chk_bucket = storage_client.bucket(bucket_name)
+
 
     cld_logfile_blob = bucket.blob(cld_logfile_path)
     gjid = ocpci_get_gjid(cld_logfile_path)
@@ -66,6 +79,12 @@ def get_logfile(cld_logfile_path, bucket_name):
     lfnm = ocpci_get_lfilenm(cld_logfile_path)
     local_logfile = OCPCI_LOCAL_DIR_BASE + f"/{gjid}/{jbnum}-{lfnm}"
     print(f"get_logfile({cld_logfile_path}) local_logfile = {local_logfile}")
+
+    stats = storage.Blob(bucket=chk_bucket, name=cld_logfile_path).exists(storage_client)
+    if stats == False:
+        print(f"get_logfile(): no GCS logfile {cld_logfile_path}")
+        return(False)
+
 
     if not os.path.exists(OCPCI_LOCAL_DIR_BASE):
         os.mkdir(OCPCI_LOCAL_DIR_BASE)
@@ -80,56 +99,66 @@ def get_logfile(cld_logfile_path, bucket_name):
     return(local_logfile)
 
 def filter_jobs(mdata):
-    print("filter_jobs() Made it!")
+    bucket_name = "origin-ci-test"
+    # Using the "name" field of the GCS pubsub data field, filter out any non-finished.json GCS object event messages
     if "name" in mdata:
-        mdata_name = mdata["name"]
+        mdata_name = str(mdata["name"])
     else:
-        print("no 'name' in mdata")
+        print(f"filter_jobs(): Bad [missing?] GCS pubsub message.data.name! [{mdata}]")
+
         return(False)
 
     mdata_list = mdata_name.split("/")
     if len(mdata_list) != 7:
             return(False)
-    print(f"mdata_name is {mdata_name}")
-    
+    print(f"filter_jobs(): mdata_name is {mdata_name}")
 
-    bucket_name = "origin-ci-test"
-    org_repo = mdata_list[2]
-    pull_number = mdata_list[3]
-    job_name = mdata_list[4]
-    build_number = mdata_list[5]
-    prlogs_pull_dir = "pr-logs/pull/"
-    # prlogs_directory_dir = "pr_logs/directory"
-    finished_json_path = prlogs_pull_dir + org_repo + "/" + pull_number + "/" + job_name + "/" + build_number + "/" + "finished.json"
-    events_json_path =   prlogs_pull_dir + org_repo + "/" + pull_number + "/" + job_name + "/" + build_number + "/" + "artifacts/build-resources/events.json"
+    # Construct "url pointers" to finished.json and events.json GCS objects"
+    gcs_finished_json = mdata_name
+    gcs_events_json = mdata_name.replace("finished.json", "artifacts/build-resources/events.json")
 
     storage_client = storage.Client()
+ 
     bucket = storage_client.get_bucket(bucket_name)
     chk_bucket = storage_client.bucket(bucket_name)
 
-    finished_json_blob = bucket.blob(finished_json_path)
-    # print(f"finished_json_blob is {finished_json_blob}")
+    finished_json_blob = bucket.blob(gcs_finished_json)
     finished_json = str(finished_json_blob.download_as_string())
-    # print(f"finished_json is {finished_json[:20]}")
 
-
+    gjid = ocpci_get_gjid(gcs_events_json)
+    model = ocpci_model_exists(gjid)
+    gcs_events_json_exists = storage.Blob(bucket=chk_bucket, name=gcs_events_json).exists(storage_client)
+    local_logfile = get_logfile(gcs_events_json, bucket_name)
 
     if "\"result\":\"SUCCESS\"" in finished_json:
-        # print("filter_jobs(): finished_json=SUCCESS filtered")
-        # TBD: seed jobname LR model
-    
-        return(False)
-    elif "\"result\":\"FAILURE\"" in finished_json:
-        stats = storage.Blob(bucket=chk_bucket, name=events_json_path).exists(storage_client)
-        if stats == False:
-            print(f"no events.json file {events_json_path}")
-            return(False)
+        if model is not False:
+            if gcs_events_json_exists:
+                ocpci_train_model(local_logfile, gjid)
+                return(True)
+            else:
+                print(f"filter_jobs({gjid}): Missing job artifacts! [{gcs_events_json}]")
+                return(False)
         else:
-            print(f"events.json file exists {events_json_path}")
-            local_logfile = get_logfile(events_json_path, bucket_name)
-            ocpci_logreduce(events_json_path, local_logfile)
-
-        return(True)
+            if gcs_events_json_exists:
+                ocpci_create_model(local_logfile, gjid)
+                return(True)
+            else:
+                print(f"filter_jobs({gjid}): Missing job artifacts! [{gcs_events_json}]")
+                return(False)
+    elif "\"result\":\"FAILURE\"" in finished_json:
+        if model is not False:
+            if gcs_events_json_exists:
+                ocpci_logreduce(gjid, local_logfile)
+                return(True)
+            else:
+                print(f"filter_jobs({gjid}): Missing job artifacts! [{gcs_events_json}]")
+                return(False)
+        else:
+            print(f"filter_jobs({gjid}): no model to logreduce! [{gcs_events_json}]")
+            return(False)
+    else:
+        print(f"filter_jobs({gjid}): Bad [malformed?] GCS finished.json! [{gcs_finished_json}]")
+        return(False)
         
 def receive_messages_with_flow_control(project_id, subscription_id, timeout=None):
     """Receives messages from a pull subscription with flow control."""
