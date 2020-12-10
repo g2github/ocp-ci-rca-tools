@@ -22,7 +22,6 @@ from typing import List, Tuple, Dict
 import os
 import sys
 import re
-from google.cloud import storage
 from logreduce.tokenizer import Tokenizer
 
 

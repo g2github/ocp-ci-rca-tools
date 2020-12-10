@@ -1,35 +1,3 @@
 .vscode
-myenv
 .DS_Store
-test-dest/
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-aws-sdn-multi-1309199373422301184-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-aws-sdn-multi-1309199373422301184-build-log.txt
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-aws-sdn-single-1309199373447467008-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-aws-sdn-single-1309199373447467008-build-log.txt
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-gcp-1309199373476827136-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-gcp-1309199373476827136-build-log.txt
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-ovn-hybrid-step-registry-1309199373527158784-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-ovn-hybrid-step-registry-1309199373527158784-build-log.txt
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-ovn-step-registry-1309199373560713216-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-805-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-ovn-step-registry-1309199373560713216-build-log.txt
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-aws-sdn-single-1311023307100786689-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-aws-sdn-single-1311023307100786689-build-log.txt
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-gcp-1311023307134341120-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-gcp-1311023307134341120-build-log.txt
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-metal-ipi-1311023307155312640-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-metal-ipi-1311023307155312640-build-log.txt
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-ovn-hybrid-step-registry-1311023307067232256-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-ovn-hybrid-step-registry-1311023307067232256-build-log.txt
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-ovn-step-registry-1311023307100786688-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-e2e-ovn-step-registry-1311023307100786688-build-log.txt
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-unit-1311023307339862016-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-unit-1311023307339862016-build-log.txt
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-verify-1311023307352444928-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-807-pull-ci-openshift-cluster-network-operator-release-4.5-verify-1311023307352444928-build-log.txt
-test-dest copy/openshift_cluster-network-operator-810-pull-ci-openshift-cluster-network-operator-master-e2e-azure-ovn-1310936582106124288-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-810-pull-ci-openshift-cluster-network-operator-master-e2e-azure-ovn-1310936582106124288-build-log.txt
-test-dest copy/openshift_cluster-network-operator-810-pull-ci-openshift-cluster-network-operator-master-e2e-openstack-1310936582227759104-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-810-pull-ci-openshift-cluster-network-operator-master-e2e-openstack-1310936582227759104-build-log.txt
-test-dest copy/openshift_cluster-network-operator-810-pull-ci-openshift-cluster-network-operator-master-e2e-upgrade-1310936583716737024-artifacts-build-resources-events.json
-test-dest copy/openshift_cluster-network-operator-810-pull-ci-openshift-cluster-network-operator-master-e2e-upgrade-1310936583716737024-build-log.txt
-LR.out
+env
