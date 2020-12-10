@@ -30,13 +30,13 @@ logfile_as_list = Dict[str, str]
 
 OCPCI_LOCAL_DIR_BASE = "/tmp/ocpci_lr"
 OCPCI_LR_LOCAL_MODELS_DIR = OCPCI_LOCAL_DIR_BASE + "/models"
-OCPCI_LR_MODEL_FILE_FORMAT = "/model-"
+OCPCI_LR_MODEL_FILENAME_TAG = "/model-"
 OCPCI_LR_LOCAL_ANOMOLIES_DIR = OCPCI_LOCAL_DIR_BASE + "/anomalies"
-OCPCI_LR_ANOMALIES_FILE_FORMAT = "/anomalies-"
+OCPCI_LR_ANOMALIES_FILE_TAG = "/anomalies-"
 
-def get_anomalies(clf: Classifier, logfile: Path) -> List[Tuple[float, Path, logfile_as_list]]:
+def get_anomalies(clf: Classifier, logfile: Path, gjid) -> List[Tuple[float, Path, logfile_as_list]]:
     result = []
-    model = clf.get("events")
+    model = clf.get(gjid)
     print("Testing %s" % logfile)
     lf_as_list = import_logfile(logfile)
     data = [model.process_line(lf_item["message"]) for lf_item in lf_as_list]
@@ -52,26 +52,6 @@ def import_logfile(logfile: Path) -> List[logfile_as_list]:
                 # Filter message that contains unfilter noise such as:
                 # `ci-op-6ts4i744/e2e-openstack to origin-ci-ig-n-tjcs`
                 if not lf_as_list["message"].startswith("Successfully assigned ")]
-
-def create_model(logfile: Path, gjid) -> Classifier:
-    # Hardwired for events.json --> TBD: generalize
-    clf = Classifier("hashing_nn") # choice of classifier algorithm
-    model = clf.get("events") # arg --> 'logfile name' i.e. events.json class vs instance
-    clf.gjid = gjid 
-
-    print("create_model(): Loading %s" % logfile)
-    lf_as_list = import_logfile(logfile)
-    if not len(lf_as_list):
-        print(f"{logfile} List from import_logfile(no [items]) is empty")
-        return(False)
-
-    data = set([model.process_line(lf_item["message"]) for lf_item in lf_as_list])
-    model.train(data)
-
-
-    clf.save(OCPCI_LR_LOCAL_MODELS_DIR + OCPCI_LR_MODEL_FILE_FORMAT + f"{gjid}.pkt") # python pkt object
-    
-    return clf
 
 def ocpci_get_gjid(cld_logfile_path):
     # Pull classifier out of the job_artifacts_url
@@ -102,33 +82,65 @@ def ocpci_get_lfilenm(logfile_path):
 
     return(lfilenm)
 
-def ocpci_model_exists(cld_logfile_path):
-    print(f"ocpci_model_exists({cld_logfile_path}) Made it!")
-    gjid = ocpci_get_gjid(cld_logfile_path)
+def ocpci_create_model(logfile: Path, gjid) -> Classifier:
+    # Hardwired for events.json --> TBD: generalize
+    clf = Classifier("hashing_nn") # choice of classifier algorithm
+    model = clf.get(gjid) # arg --> 'logfile name' i.e. events.json class vs instance
+    clf.gjid = gjid 
+    # model.gjid = gjid
 
-    if os.path.exists(OCPCI_LR_LOCAL_MODELS_DIR + OCPCI_LR_MODEL_FILE_FORMAT + f"{gjid}.pkt"):
+    print("ocpci_create_model(): Loading %s" % logfile)
+    lf_as_list = import_logfile(logfile)
+    if not len(lf_as_list):
+        print(f"{logfile} List from import_logfile(no [items]) is empty")
+        return(False)
+
+    data = set([model.process_line(lf_item["message"]) for lf_item in lf_as_list])
+    model.train(data)
+
+
+    clf.save(OCPCI_LR_LOCAL_MODELS_DIR + OCPCI_LR_MODEL_FILENAME_TAG + f"{gjid}.pkt") 
+    
+    return clf
+
+def ocpci_train_model(logfile: Path, gjid) -> Classifier:
+    model_path = OCPCI_LR_LOCAL_MODELS_DIR + OCPCI_LR_MODEL_FILENAME_TAG + f"{gjid}.pkt"
+    if os.path.exists(model_path):
+        clf = Classifier.load(model_path)
+        model = clf.get(gjid)
+
+        print("ocpci_train_model(): Loading %s" % logfile)
+        lf_as_list = import_logfile(logfile)
+        data = set([model.process_line(lf_item["message"]) for lf_item in lf_as_list])
+        model.train (data)
+        clf.save(model_path)
+
         return(True)
     else:
         return(False)
 
-def ocpci_logreduce(cld_logfile_path, lcl_logfile_path):
-    print(f"ocpci_logreduce({cld_logfile_path}) Made it!")
+def ocpci_model_exists(gjid):
+    # print(f"ocpci_model_exists({gjid}) Made it!")
+    model_path = OCPCI_LR_LOCAL_MODELS_DIR + OCPCI_LR_MODEL_FILENAME_TAG + f"{gjid}.pkt"
 
-    gjid = ocpci_get_gjid(cld_logfile_path)
-    print(f"ocpci_logreduce(): gjid is {gjid}")
+    if os.path.exists(model_path):
+        print(f"ocpci_model_exists({gjid}) at {model_path}")
+        model = Classifier.load(model_path)
 
-    if ocpci_model_exists(cld_logfile_path):
-        clf = Classifier.load(OCPCI_LR_LOCAL_MODELS_DIR + OCPCI_LR_MODEL_FILE_FORMAT + f"{gjid}.pkt")
-        anomalies = get_anomalies(clf, lcl_logfile_path)
-        # print(f"ocpci_logreduce(): {anomalies}")
-        gjid_anomalies_path = OCPCI_LR_LOCAL_ANOMOLIES_DIR + OCPCI_LR_ANOMALIES_FILE_FORMAT + f"{gjid}.json"
-        if not os.path.exists(OCPCI_LR_LOCAL_ANOMOLIES_DIR):
-            os.mkdir(OCPCI_LR_LOCAL_ANOMOLIES_DIR)
-            
-        # store results for eventual presentation
-        with open(gjid_anomalies_path, 'a+') as f:
-            json.dump(anomalies, f) 
+        return(model)
     else:
-        create_model(lcl_logfile_path, gjid)
+        print(f"ocpci_model_exists({gjid}) NOT at {model_path}")
+        return(False)
+
+def ocpci_logreduce(gjid, lcl_logfile_path):
+    model = ocpci_model_exists(gjid)
+    anomalies = get_anomalies(model, lcl_logfile_path, gjid)
+    gjid_anomalies_path = OCPCI_LR_LOCAL_ANOMOLIES_DIR + OCPCI_LR_ANOMALIES_FILE_TAG + f"{gjid}.json"
+    if not os.path.exists(OCPCI_LR_LOCAL_ANOMOLIES_DIR):
+        os.mkdir(OCPCI_LR_LOCAL_ANOMOLIES_DIR)
+        
+    # store results for eventual presentation
+    with open(gjid_anomalies_path, 'a+') as f:
+        json.dump(anomalies, f) 
 
     return
